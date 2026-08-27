@@ -1,0 +1,18 @@
+{
+  "name": "AI Matte",
+  "basename": "obs-ai-matte",
+  "version": "0.1.0",
+  "author": "WorkBuddy",
+  "displayName": "AI 抠图滤镜 (DirectML)",
+  "platforms": {
+    "windows-x64": {
+      "files": [
+        "obs-ai-matte.dll",
+        "onnxruntime.dll",
+        "onnxruntime_providers_dml.dll",
+        "DirectML.dll",
+        "data/obs-ai-matte/"
+      ]
+    }
+  }
+}

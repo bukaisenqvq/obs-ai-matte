@@ -1,0 +1,55 @@
+name: Build Plugin
+
+on:
+  push:
+    branches: [main, master]
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download ONNX Runtime (Windows x64)
+        run: |
+          $v = "1.20.1"
+          Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v$v/onnxruntime-win-x64-$v.zip" -OutFile ort.zip
+          Expand-Archive -Force ort.zip -DestinationPath third_party
+          Move-Item "third_party/onnxruntime-win-x64-$v" "third_party/onnxruntime"
+
+      - name: Download AI models
+        run: |
+          New-Item -ItemType Directory -Force -Path data/obs-ai-matte | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx" -OutFile data/obs-ai-matte/isnet-general-use.onnx
+          Invoke-WebRequest -Uri "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net_human_seg.onnx" -OutFile data/obs-ai-matte/u2net_human_seg.onnx
+          (Get-Item data/obs-ai-matte/isnet-general-use.onnx).Length
+          (Get-Item data/obs-ai-matte/u2net_human_seg.onnx).Length
+
+      - name: Build plugin (obs-plugintemplate)
+        uses: obsproject/obs-plugintemplate/.github/actions/build-plugin@master
+        with:
+          platform: windows
+          obs-version: "31.0.0"
+
+      - name: Collect package
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "build/**/obs-ai-matte.dll" -Destination dist -Recurse -ErrorAction SilentlyContinue
+          Copy-Item "third_party/onnxruntime/lib/onnxruntime.dll" dist -ErrorAction SilentlyContinue
+          Copy-Item "third_party/onnxruntime/lib/onnxruntime_providers_dml.dll" dist -ErrorAction SilentlyContinue
+          Copy-Item "third_party/onnxruntime/lib/DirectML.dll" dist -ErrorAction SilentlyContinue
+          Copy-Item "data/obs-ai-matte/*.onnx" dist -ErrorAction SilentlyContinue
+          Get-ChildItem dist | Select-Object Name, Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-ai-matte-windows
+          path: dist

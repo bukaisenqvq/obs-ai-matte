@@ -1,0 +1,6 @@
+third_party/
+build/
+dist/
+*.zip
+.vs/
+CMakeCache.txt
