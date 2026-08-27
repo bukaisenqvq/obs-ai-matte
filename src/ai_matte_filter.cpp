@@ -16,6 +16,8 @@
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
+#include <cstdio>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -101,7 +103,8 @@ static std::string find_model_path(const char* filename)
 			return p;
 		}
 	}
-	/* 2) OBS data 目录：<exe_dir>/../data/obs-plugins/obs-ai-matte/ */
+	/* 2) OBS data 目录：exe 位于 bin/64bit/obs64.exe，data 在 obs-studio/data/
+	 *    因此从 exe 目录需要 ../../data/obs-plugins/obs-ai-matte/ */
 	char exe[1024];
 	if (os_get_executable_path(exe, sizeof(exe))) {
 		std::string dir = exe;
@@ -109,7 +112,7 @@ static std::string find_model_path(const char* filename)
 		if (sl != std::string::npos)
 			dir = dir.substr(0, sl);
 		std::string p =
-			dir + "/../data/obs-plugins/obs-ai-matte/" + filename;
+			dir + "/../../data/obs-plugins/obs-ai-matte/" + filename;
 		FILE* f = fopen(p.c_str(), "rb");
 		if (f) {
 			fclose(f);
@@ -314,6 +317,8 @@ static void box_blur(const uint8_t* src, uint8_t* tmp, uint8_t* dst,
 }
 
 /* ===================== OBS 回调 ===================== */
+static void ai_matte_update(void* data, obs_data_t* settings);
+
 static const char* ai_matte_get_name(void* private_data)
 {
 	UNUSED_PARAMETER(private_data);
@@ -566,10 +571,11 @@ static struct obs_source_frame* ai_matte_filter_video(
 		bg_scaled = f->bg_scaled;
 	}
 
-	/* 8) 合成（按行 stride 寻址，兼容可能的行对齐）*/
-	uint8_t br = (uint8_t)((f->bg_color >> 16) & 0xFF);
-	uint8_t bg = (uint8_t)((f->bg_color >> 8) & 0xFF);
-	uint8_t bb = (uint8_t)(f->bg_color & 0xFF);
+	/* 8) 合成（按行 stride 寻址，兼容可能的行对齐）
+	 * OBS 颜色为 0xAABBGGRR：低字节=R, 次低=G, 次高=B */
+	uint8_t cr = (uint8_t)(f->bg_color & 0xFF);
+	uint8_t cg = (uint8_t)((f->bg_color >> 8) & 0xFF);
+	uint8_t cb = (uint8_t)((f->bg_color >> 16) & 0xFF);
 
 	for (int y = 0; y < H; y++) {
 		uint8_t* row = frame->data[0] + (size_t)y * sstride;
@@ -582,11 +588,11 @@ static struct obs_source_frame* ai_matte_filter_video(
 
 			if (f->bg_mode == BG_TRANSPARENT) {
 				row[p + 3] = a;
-			} else if (f->bg_mode == BG_SOLID) {
-				row[p] = (uint8_t)(r * af + br * (1 - af));
-				row[p + 1] = (uint8_t)(g * af + bg * (1 - af));
-				row[p + 2] = (uint8_t)(b * af + bb * (1 - af));
-				row[p + 3] = 255;
+		} else if (f->bg_mode == BG_SOLID) {
+			row[p] = (uint8_t)(r * af + cr * (1 - af));
+			row[p + 1] = (uint8_t)(g * af + cg * (1 - af));
+			row[p + 2] = (uint8_t)(b * af + cb * (1 - af));
+			row[p + 3] = 255;
 			} else if (f->bg_mode == BG_IMAGE &&
 				   f->has_bg_image) {
 				int bp = i * 4;

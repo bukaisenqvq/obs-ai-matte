@@ -13,7 +13,7 @@
 
 ## 快速使用（给最终用户 / 朋友）
 
-1. 到本仓库 **Releases** 下载 `obs-ai-matte-*.zip`（CI 自动构建，含 dll + onnxruntime + 模型）。
+1. 下载插件包：在仓库 **Actions** 页面点最新一次构建 → 右侧下载 `obs-ai-matte-windows` 产物；或发一个 GitHub **Release**（自动上传 Release 资产）。zip 内含 dll + onnxruntime + 模型。
 2. 把 zip 里的内容**解压到 OBS Studio 安装目录**（例如 `C:\Program Files\obs-studio\`），它会自动落到：
    - `obs-plugins/64bit/obs-ai-matte.dll`
    - `obs-plugins/64bit/onnxruntime*.dll`
@@ -36,15 +36,29 @@
 
 > 性能参考（RTX 2080 Ti）：isnet 约 3~5 fps，u2net 约 10~15 fps。想要更流畅选「人像专用」模型。OBS 场景帧率会因此受限，属正常。
 
+## 首次部署：把仓库推到 GitHub（只需一次）
+
+工程已经在本地初始化并提交好了。你只需推送一次，之后 CI 会自动编译：
+
+```bash
+cd C:\Users\u\WorkBuddy\抠图\obs-ai-matte
+git remote add origin https://github.com/<你的用户名>/obs-ai-matte.git
+git branch -M main
+git push -u origin main
+```
+
+- 推送时若弹出 GitHub 登录，用你的账号授权即可（或用 Personal Access Token）。
+- 没有 GitHub 账号？网页 https://github.com/new 新建仓库（名字 `obs-ai-matte`，**不要**勾 README），成功后按上面命令填你的用户名即可。
+
 ## 自动出包（CI）—— 你/朋友都免编译
 
 本仓库已配置 GitHub Actions（`.github/workflows/build.yml`）：
 
-- 推送到 `master`/`main` 分支 → 自动在 Windows 上构建，产出可下载的插件包（Artifact）。
-- 发一个 GitHub Release → 自动把插件包作为 Release 资产上传。
-- CI 会自动下载 ONNX Runtime 和两个 AI 模型并一并打包，所以 Release 里的 zip **开箱即用**。
+- 推送到 `main` 分支 → 自动在 Windows 上构建，产出可下载的插件包（Actions 页面右侧 Artifact：`obs-ai-matte-windows`）。
+- CI 会自动下载 ONNX Runtime（1.20.1）和两个 AI 模型并一并打包，所以 zip **开箱即用**。
+- 想要「Release 一键下载」：在 GitHub 发一个 Release，Actions 会自动把产物上传为 Release 资产。
 
-你只需：把这个 `obs-ai-matte` 目录作为仓库推到 GitHub，之后每次发布版本都会自动生成可分发的插件包。把 Release 链接发给朋友即可。
+你只需把仓库推到 GitHub（见上），之后每次 push 都会重新构建。把下载链接发给朋友即可——他们解压进 OBS 就能用，全程不用装 Python、不用虚拟摄像头驱动。
 
 ## 本机编译（可选，仅当你想自己改代码）
 

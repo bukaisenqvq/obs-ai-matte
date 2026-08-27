@@ -18,14 +18,6 @@ if(NOT DEFINED ONNXRUNTIME_DIR)
 	set(ONNXRUNTIME_DIR "${CMAKE_SOURCE_DIR}/third_party/onnxruntime")
 endif()
 
-# ---- stb_image（仅用于解码自定义背景图，单头库）----
-include(FetchContent)
-FetchContent_Declare(
-	stb
-	GIT_REPOSITORY https://github.com/nothings/stb.git
-	GIT_TAG master)
-FetchContent_MakeAvailable(stb)
-
 add_obs_plugin(
 	obs-ai-matte
 	SOURCES
@@ -35,13 +27,14 @@ add_obs_plugin(
 
 target_include_directories(obs-ai-matte PRIVATE
 	"${ONNXRUNTIME_DIR}/include"
-	"${stb_SOURCE_DIR}")
+	"${CMAKE_SOURCE_DIR}/third_party/stb")
 
 target_link_libraries(obs-ai-matte PRIVATE "${ONNXRUNTIME_DIR}/lib/onnxruntime.lib")
 
 # 把 onnxruntime 运行所需的 DLL 一并复制到插件输出目录（随包分发）
+# 注意：onnxruntime 的 .dll 在包根目录（不是 lib/），lib/ 下是 .lib 导入库
 add_custom_command(TARGET obs-ai-matte POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
-		"${ONNXRUNTIME_DIR}/lib"
+		"${ONNXRUNTIME_DIR}"
 		"$<TARGET_FILE_DIR:obs-ai-matte>"
 	COMMENT "Copying onnxruntime DLLs next to the plugin")

@@ -40,13 +40,14 @@ jobs:
 
       - name: Collect package
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item "build/**/obs-ai-matte.dll" -Destination dist -Recurse -ErrorAction SilentlyContinue
-          Copy-Item "third_party/onnxruntime/lib/onnxruntime.dll" dist -ErrorAction SilentlyContinue
-          Copy-Item "third_party/onnxruntime/lib/onnxruntime_providers_dml.dll" dist -ErrorAction SilentlyContinue
-          Copy-Item "third_party/onnxruntime/lib/DirectML.dll" dist -ErrorAction SilentlyContinue
-          Copy-Item "data/obs-ai-matte/*.onnx" dist -ErrorAction SilentlyContinue
-          Get-ChildItem dist | Select-Object Name, Length
+          New-Item -ItemType Directory -Force -Path dist/obs-plugins/64bit | Out-Null
+          New-Item -ItemType Directory -Force -Path dist/data/obs-plugins/obs-ai-matte | Out-Null
+          Copy-Item "build/**/obs-ai-matte.dll" -Destination dist/obs-plugins/64bit -Recurse -ErrorAction SilentlyContinue
+          # onnxruntime 的 .dll 在包根目录（不在 lib/），lib/ 下是 .lib 导入库
+          Copy-Item "third_party/onnxruntime/*.dll" -Destination dist/obs-plugins/64bit -ErrorAction SilentlyContinue
+          Copy-Item "third_party/onnxruntime/lib/*.dll" -Destination dist/obs-plugins/64bit -ErrorAction SilentlyContinue
+          Copy-Item "data/obs-ai-matte/*.onnx" -Destination dist/data/obs-plugins/obs-ai-matte -ErrorAction SilentlyContinue
+          Get-ChildItem dist -Recurse | Select-Object FullName, Length
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
