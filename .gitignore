@@ -1,4 +1,12 @@
 third_party/onnxruntime/
+
+# CMake preset 的二进制输出目录（build_x64 / build_macos / build_x86_64）
+build_x64/
+build_macos/
+build_x86_64/
+release/
+CMakeUserPresets.json
+
 build/
 dist/
 *.zip

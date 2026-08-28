@@ -17,12 +17,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download ONNX Runtime (Windows x64)
+      # 注意：必须用 gpu 包，CPU 包不含 DirectML 相关 dll
+      - name: Download ONNX Runtime (Windows x64, GPU/DirectML)
         run: |
           $v = "1.20.1"
-          Invoke-WebRequest -Uri "https://github.com/microsoft/onnxruntime/releases/download/v$v/onnxruntime-win-x64-$v.zip" -OutFile ort.zip
+          $url = "https://github.com/microsoft/onnxruntime/releases/download/v$v/onnxruntime-win-x64-gpu-$v.zip"
+          Invoke-WebRequest -Uri $url -OutFile ort.zip
           Expand-Archive -Force ort.zip -DestinationPath third_party
-          Move-Item "third_party/onnxruntime-win-x64-$v" "third_party/onnxruntime"
+          Move-Item "third_party/onnxruntime-win-x64-gpu-$v" "third_party/onnxruntime"
+          Get-ChildItem third_party/onnxruntime -Recurse -Filter *.dll | Select-Object FullName
 
       - name: Download AI models
         run: |
@@ -32,21 +35,37 @@ jobs:
           (Get-Item data/obs-ai-matte/isnet-general-use.onnx).Length
           (Get-Item data/obs-ai-matte/u2net_human_seg.onnx).Length
 
+      # 该 action 的合法入参只有: target / config / codesign / codesignIdent / codesignTeam / workingDirectory
       - name: Build plugin (obs-plugintemplate)
         uses: obsproject/obs-plugintemplate/.github/actions/build-plugin@master
         with:
-          platform: windows
-          obs-version: "31.0.0"
+          target: x64
+          config: RelWithDebInfo
+          codesign: false
 
       - name: Collect package
         run: |
           New-Item -ItemType Directory -Force -Path dist/obs-plugins/64bit | Out-Null
           New-Item -ItemType Directory -Force -Path dist/data/obs-plugins/obs-ai-matte | Out-Null
-          Copy-Item "build/**/obs-ai-matte.dll" -Destination dist/obs-plugins/64bit -Recurse -ErrorAction SilentlyContinue
-          # onnxruntime 的 .dll 在包根目录（不在 lib/），lib/ 下是 .lib 导入库
-          Copy-Item "third_party/onnxruntime/*.dll" -Destination dist/obs-plugins/64bit -ErrorAction SilentlyContinue
-          Copy-Item "third_party/onnxruntime/lib/*.dll" -Destination dist/obs-plugins/64bit -ErrorAction SilentlyContinue
+
+          $dll = Get-ChildItem -Path . -Recurse -Filter obs-ai-matte.dll -ErrorAction SilentlyContinue |
+                 Where-Object { $_.FullName -notmatch '\\dist\\' } |
+                 Select-Object -First 1
+          if ($dll) {
+            Copy-Item $dll.FullName -Destination dist/obs-plugins/64bit/ -Force
+            Write-Host "plugin dll: $($dll.FullName)"
+          } else {
+            Write-Host "::error::obs-ai-matte.dll not found in workspace"
+            Get-ChildItem release, build_x64 -Recurse -Filter *.dll -ErrorAction SilentlyContinue |
+              Select-Object -First 30 FullName
+            exit 1
+          }
+
+          Get-ChildItem third_party/onnxruntime -Recurse -Filter *.dll -ErrorAction SilentlyContinue |
+            ForEach-Object { Copy-Item $_.FullName -Destination dist/obs-plugins/64bit/ -Force }
+
           Copy-Item "data/obs-ai-matte/*.onnx" -Destination dist/data/obs-plugins/obs-ai-matte -ErrorAction SilentlyContinue
+
           Get-ChildItem dist -Recurse | Select-Object FullName, Length
 
       - name: Upload artifact

@@ -1,40 +1,51 @@
 cmake_minimum_required(VERSION 3.28...3.30)
 
-project(obs-ai-matte
-	VERSION 0.1.0
-	DESCRIPTION "OBS filter: real-time AI background removal (DirectML)"
-	LANGUAGES C CXX)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/bootstrap.cmake" NO_POLICY_SCOPE)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+project(${_name} VERSION ${_version})
 
-# ---- OBS 插件助手（由 CI / 本机构建通过 -DOBS_SOURCE_DIR=... 提供）----
-list(APPEND CMAKE_MODULE_PATH "${OBS_SOURCE_DIR}/cmake")
-include(ObsPluginHelpers)
+option(ENABLE_FRONTEND_API "Use obs-frontend-api for UI functionality" OFF)
+option(ENABLE_QT "Use Qt functionality" OFF)
 
-# ---- ONNX Runtime：默认使用仓库内 third_party/onnxruntime（CI 会自动下载）----
+include(compilerconfig)
+include(defaults)
+include(helpers)
+
+add_library(${CMAKE_PROJECT_NAME} MODULE)
+
+find_package(libobs REQUIRED)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs)
+
+target_sources(
+  ${CMAKE_PROJECT_NAME}
+  PRIVATE src/plugin-main.cpp src/ai_matte_filter.cpp)
+
+# ---------------------------------------------------------------------------
+# ONNX Runtime (DirectML / GPU build)
+# CI 会在 configure 之前把 SDK 下载到 third_party/onnxruntime
+# ---------------------------------------------------------------------------
 if(NOT DEFINED ONNXRUNTIME_DIR)
-	set(ONNXRUNTIME_DIR "${CMAKE_SOURCE_DIR}/third_party/onnxruntime")
+  set(ONNXRUNTIME_DIR "${CMAKE_SOURCE_DIR}/third_party/onnxruntime")
 endif()
 
-add_obs_plugin(
-	obs-ai-matte
-	SOURCES
-		src/plugin-main.cpp
-		src/ai_matte_filter.cpp
-		src/ai_matte_filter.hpp)
+target_include_directories(
+  ${CMAKE_PROJECT_NAME}
+  PRIVATE "${ONNXRUNTIME_DIR}/include" "${CMAKE_SOURCE_DIR}/third_party/stb")
 
-target_include_directories(obs-ai-matte PRIVATE
-	"${ONNXRUNTIME_DIR}/include"
-	"${CMAKE_SOURCE_DIR}/third_party/stb")
+target_link_libraries(${CMAKE_PROJECT_NAME}
+                      PRIVATE "${ONNXRUNTIME_DIR}/lib/onnxruntime.lib")
 
-target_link_libraries(obs-ai-matte PRIVATE "${ONNXRUNTIME_DIR}/lib/onnxruntime.lib")
+# 把运行时 DLL 复制到插件输出目录随包分发。
+# 不同版本的 onnxruntime 包把 .dll 放在根目录或 lib/ 下，这里两处都扫。
+file(GLOB ORT_DLLS "${ONNXRUNTIME_DIR}/*.dll" "${ONNXRUNTIME_DIR}/lib/*.dll")
 
-# 把 onnxruntime 运行所需的 DLL 一并复制到插件输出目录（随包分发）
-# 注意：onnxruntime 的 .dll 在包根目录（不是 lib/），lib/ 下是 .lib 导入库
-add_custom_command(TARGET obs-ai-matte POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy_directory
-		"${ONNXRUNTIME_DIR}"
-		"$<TARGET_FILE_DIR:obs-ai-matte>"
-	COMMENT "Copying onnxruntime DLLs next to the plugin")
+foreach(ORT_DLL IN LISTS ORT_DLLS)
+  add_custom_command(
+    TARGET ${CMAKE_PROJECT_NAME}
+    POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${ORT_DLL}"
+            "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>"
+    COMMENT "Copying ${ORT_DLL} next to the plugin")
+endforeach()
+
+set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
