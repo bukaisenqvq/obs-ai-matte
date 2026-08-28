@@ -13,6 +13,10 @@ include(helpers)
 
 add_library(${CMAKE_PROJECT_NAME} MODULE)
 
+# 源码使用了 C++20 的指定初始化器（designated initializers）
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CXX_STANDARD 20
+                                                      CXX_STANDARD_REQUIRED ON)
+
 find_package(libobs REQUIRED)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs)
 

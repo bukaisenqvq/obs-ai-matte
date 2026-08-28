@@ -7,6 +7,17 @@
 #include <util/base.h>
 #include <util/bmem.h>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
+
+// 必须先用 USE_DML 打开 OrtApi 里的 DirectML 入口，否则结构体中没有该成员
+#ifndef USE_DML
+#define USE_DML 1
+#endif
+
 // 官方发布包里头文件平铺在 include/ 下，不是源码仓库的 onnxruntime/core/session/ 路径
 #include <onnxruntime_c_api.h>
 
@@ -106,8 +117,14 @@ static std::string find_model_path(const char* filename)
 	}
 	/* 2) OBS data 目录：exe 位于 bin/64bit/obs64.exe，data 在 obs-studio/data/
 	 *    因此从 exe 目录需要 ../../data/obs-plugins/obs-ai-matte/ */
-	char exe[1024];
-	if (os_get_executable_path(exe, sizeof(exe))) {
+	char exe[1024] = {0};
+	bool got_exe = false;
+#ifdef _WIN32
+	/* 不用 os_get_executable_path（各 OBS 版本可用性不稳定），直接用 Win32 API */
+	DWORD n = GetModuleFileNameA(NULL, exe, (DWORD)sizeof(exe));
+	got_exe = (n > 0 && n < sizeof(exe));
+#endif
+	if (got_exe) {
 		std::string dir = exe;
 		size_t sl = dir.find_last_of("/\\");
 		if (sl != std::string::npos)
@@ -449,7 +466,9 @@ static struct obs_source_frame* ai_matte_filter_video(
 	/* 3) 推理（ORT 分配对齐内存，再拷入输入）*/
 	std::vector<int64_t> shape{1, 3, S, S};
 	OrtValue* in_t = nullptr;
-	g_ort->CreateTensorAsOrtValue(g_mem_info, shape.data(),
+	OrtAllocator* allocator = nullptr;
+	g_ort->GetAllocatorWithDefaultOptions(&allocator);
+	g_ort->CreateTensorAsOrtValue(allocator, shape.data(),
 				      shape.size(),
 				      ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT,
 				      &in_t);
