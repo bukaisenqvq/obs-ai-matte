@@ -21,6 +21,18 @@
 // 官方发布包里头文件平铺在 include/ 下，不是源码仓库的 onnxruntime/core/session/ 路径
 #include <onnxruntime_c_api.h>
 
+/* OrtDmlApi 的最小声明。
+ * ORT 1.20 起 DirectML 不再挂在 OrtApi 上，而是走 provider bridge：
+ *   GetExecutionProviderApi("DML", ORT_API_VERSION, &ptr)
+ * 返回的指针即是 OrtDmlApi*，其第一个成员就是
+ * SessionOptionsAppendExecutionProvider_DML。
+ * dml_provider_factory.h 不一定随发布包分发，故这里自行声明，
+ * 只取第一个成员，偏移为 0，安全。 */
+struct OrtDmlApiMinimal {
+	OrtStatusPtr(ORT_API_CALL* SessionOptionsAppendExecutionProvider_DML)(
+		OrtSessionOptions* options, int device_id);
+};
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -171,11 +183,29 @@ static bool load_session(ai_matte_data* f, int model_index)
 	OrtSessionOptions* sopts = nullptr;
 	g_ort->CreateSessionOptions(&sopts);
 #ifdef _WIN32
-	/* 优先 DirectML（独显加速），失败自动回退 */
-	OrtStatus* ds =
-		g_ort->SessionOptionsAppendExecutionProvider_DML(sopts, 0);
-	if (ds)
-		g_ort->ReleaseStatus(ds);
+	/* 优先 DirectML（独显加速），不可用则自动回退 CPU */
+	{
+		const void* dml_raw = nullptr;
+		OrtStatus* st = g_ort->GetExecutionProviderApi(
+			"DML", ORT_API_VERSION, &dml_raw);
+		if (st) {
+			blog(LOG_WARNING,
+			     "[obs-ai-matte] GetExecutionProviderApi(DML) failed, fall back to CPU");
+			g_ort->ReleaseStatus(st);
+		} else if (dml_raw) {
+			const OrtDmlApiMinimal* dml =
+				(const OrtDmlApiMinimal*)dml_raw;
+			OrtStatus* ds =
+				dml->SessionOptionsAppendExecutionProvider_DML(
+					sopts, 0);
+			if (ds) {
+				blog(LOG_WARNING,
+				     "[obs-ai-matte] DML unavailable, fall back to CPU: %s",
+				     g_ort->GetErrorMessage(ds));
+				g_ort->ReleaseStatus(ds);
+			}
+		}
+	}
 #endif
 
 	std::wstring wpath(path.begin(), path.end());
@@ -648,8 +678,11 @@ struct obs_source_info ai_matte_filter_info = {
 	.get_name = ai_matte_get_name,
 	.create = ai_matte_create,
 	.destroy = ai_matte_destroy,
-	.update = ai_matte_update,
-	.get_properties = ai_matte_get_properties,
+	/* 注意：C++20 指定初始化器必须严格按 obs_source_info 的成员声明顺序书写。
+	 * OBS 31 顺序为：id, type, output_flags, get_name, create, destroy,
+	 * get_defaults, get_properties, update, ..., filter_video */
 	.get_defaults = ai_matte_get_defaults,
+	.get_properties = ai_matte_get_properties,
+	.update = ai_matte_update,
 	.filter_video = ai_matte_filter_video,
 };
