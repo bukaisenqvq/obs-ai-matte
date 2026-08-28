@@ -19,15 +19,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 注意：必须用 gpu 包，CPU 包不含 DirectML 相关 dll
-      - name: Download ONNX Runtime (Windows x64, GPU/DirectML)
+      # DirectML 版本只在 NuGet 上分发。
+      # GitHub Release 里的 onnxruntime-win-x64-gpu 包是 CUDA/TensorRT，不含 DirectML。
+      - name: Download ONNX Runtime DirectML (NuGet)
         run: |
           $v = "1.20.1"
-          $url = "https://github.com/microsoft/onnxruntime/releases/download/v$v/onnxruntime-win-x64-gpu-$v.zip"
-          Invoke-WebRequest -Uri $url -OutFile ort.zip
-          Expand-Archive -Force ort.zip -DestinationPath third_party
-          Move-Item "third_party/onnxruntime-win-x64-gpu-$v" "third_party/onnxruntime"
-          Get-ChildItem third_party/onnxruntime -Recurse -Filter *.dll | Select-Object FullName
+          $pkg = "microsoft.ml.onnxruntime.directml"
+          $url = "https://api.nuget.org/v3-flatcontainer/" + $pkg + "/" + $v + "/" + $pkg + "." + $v + ".nupkg"
+          Write-Host "downloading $url"
+          Invoke-WebRequest -Uri $url -OutFile ort.nupkg
+          Expand-Archive -Force ort.nupkg -DestinationPath third_party/ort
+
+          # 归一化成 CMakeLists 期望的布局：include/  lib/  根目录放 dll
+          New-Item -ItemType Directory -Force -Path third_party/onnxruntime/lib | Out-Null
+          Copy-Item "third_party/ort/build/native/include" -Destination third_party/onnxruntime/include -Recurse -Force
+          Copy-Item "third_party/ort/runtimes/win-x64/native/*.dll" -Destination third_party/onnxruntime -Force
+          Copy-Item "third_party/ort/runtimes/win-x64/native/*.lib" -Destination third_party/onnxruntime/lib -Force
+          Get-ChildItem third_party/onnxruntime -Recurse | Select-Object FullName, Length
 
       - name: Download AI models
         run: |
