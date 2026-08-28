@@ -30,7 +30,9 @@ endif()
 
 target_include_directories(
   ${CMAKE_PROJECT_NAME}
-  PRIVATE "${ONNXRUNTIME_DIR}/include" "${CMAKE_SOURCE_DIR}/third_party/stb")
+  PRIVATE "${ONNXRUNTIME_DIR}/include"
+          "${ONNXRUNTIME_DIR}/include/onnxruntime/core/session"
+          "${CMAKE_SOURCE_DIR}/third_party/stb")
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
                       PRIVATE "${ONNXRUNTIME_DIR}/lib/onnxruntime.lib")

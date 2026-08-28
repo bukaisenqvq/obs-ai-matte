@@ -7,7 +7,8 @@
 #include <util/base.h>
 #include <util/bmem.h>
 
-#include <onnxruntime/core/session/onnxruntime_c_api.h>
+// 官方发布包里头文件平铺在 include/ 下，不是源码仓库的 onnxruntime/core/session/ 路径
+#include <onnxruntime_c_api.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
