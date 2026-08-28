@@ -9,7 +9,9 @@ on:
 jobs:
   build:
     name: Build Windows
-    runs-on: windows-latest
+    # 必须固定 windows-2022：CMakePresets 用的是 "Visual Studio 17 2022" 生成器，
+    # 而 windows-latest 现在是 windows-2025-vs2026 镜像（装的是 VS 2026），找不到 VS 2022 会报错。
+    runs-on: windows-2022
     defaults:
       run:
         shell: pwsh
